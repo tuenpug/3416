@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3416 戰略終端 Pro (Chart Fix)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+        .mono { font-family: 'SF Mono', 'JetBrains Mono', monospace; }
+        .active-btn:active { transform: scale(0.96); transition: 0.1s; }
+        input, select { -webkit-appearance: none; border: none; outline: none; border-radius: 12px; }
+        .mode-active { border: 2px solid #0f172a !important; background: #0f172a !important; color: white !important; }
+        /* 確保畫布容器有明確高度 */
+        .chart-wrapper { position: relative; height: 128px; width: 100%; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-900 pb-12">
+
+    <div class="bg-slate-900 text-white p-6 rounded-b-[3rem] shadow-2xl mb-6">
+        <div class="flex justify-between items-center mb-2 text-[10px] font-bold opacity-40 tracking-widest">
+            <span>TERMINAL v12 | 3416.HK</span>
+            <span id="syncStatus" class="text-emerald-400">● Live</span>
+        </div>
+        <div class="flex items-baseline gap-3 mb-6">
+            <h1 id="totalEquity" class="text-4xl font-black mono tracking-tighter">$1,000,000</h1>
+            <span id="totalRoi" class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-xs font-bold">+0.0%</span>
+        </div>
+        <div class="grid grid-cols-2 gap-6 border-t border-white/10 pt-5 text-sm">
+            <div>
+                <p class="text-[10px] opacity-40 uppercase font-bold mb-1 text-emerald-300">流動現金</p>
+                <p id="cashBal" class="text-xl font-bold mono text-emerald-400">$1,000,000</p>
+            </div>
+            <div class="text-right">
+                <p class="text-[10px] opacity-40 uppercase font-bold mb-1 text-rose-300">預計月派息</p>
+                <p id="estMonthDiv" class="text-xl font-bold mono text-rose-400">$0</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="px-4 space-y-4">
+        <div class="bg-white rounded-3xl p-5 shadow-sm border border-slate-200">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest">動態資產配置</h3>
+                <div id="yieldTag" class="text-[10px] font-bold bg-slate-100 px-2 py-1 rounded">--%</div>
+            </div>
+            <div class="flex items-center gap-6">
+                <div class="w-1/2 chart-wrapper">
+                    <canvas id="allocChart"></canvas>
+                </div>
+                <div class="w-1/2 space-y-2 text-[10px] font-bold">
+                    <div class="flex justify-between text-blue-500"><span>B1 (40%)</span><span id="v1_label" class="mono">0%</span></div>
+                    <div class="flex justify-between text-amber-500"><span>B2 (30%)</span><span id="v2_label" class="mono">0%</span></div>
+                    <div class="flex justify-between text-rose-500"><span>B3 (30%)</span><span id="v3_label" class="mono">0%</span></div>
+                    <div class="flex justify-between text-slate-400 border-t pt-1"><span>Cash</span><span id="vc_label" class="mono">$1M</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-[2.5rem] p-6 shadow-xl border border-slate-200 space-y-4">
+            <div class="grid grid-cols-2 gap-2">
+                <button id="buyModeBtn" onclick="switchMode('BUY')" class="mode-active py-3 rounded-2xl font-black text-xs uppercase transition-all shadow-sm">買入</button>
+                <button id="sellModeBtn" onclick="switchMode('SELL')" class="bg-slate-100 text-slate-400 py-3 rounded-2xl font-black text-xs uppercase transition-all shadow-sm">沽出</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <div class="bg-emerald-50 p-3 rounded-2xl">
+                    <span class="text-[9px] font-bold text-emerald-600 uppercase">月息 $</span>
+                    <input type="number" id="divSetting" value="0.14" step="0.001" oninput="updateUI()" class="bg-transparent font-black mono text-emerald-700 text-lg w-full">
+                </div>
+                <div class="bg-slate-50 p-3 rounded-2xl">
+                    <span class="text-[9px] font-bold text-slate-400 uppercase">日期</span>
+                    <input type="date" id="tradeDate" class="bg-transparent font-bold text-slate-700 text-[11px] w-full mt-1">
+                </div>
+            </div>
+
+            <select id="bucket" onchange="updateUI()" class="w-full p-4 bg-slate-100 rounded-2xl font-bold text-sm text-slate-600">
+                <option value="b1">份額 1 (核心 40%)</option>
+                <option value="b2">份額 2 (波段 30%)</option>
+                <option value="b3">份額 3 (撈底 30%)</option>
+            </select>
+
+            <div class="grid grid-cols-3 gap-2">
+                <div class="bg-slate-100 rounded-2xl p-2 relative">
+                    <span class="text-[8px] font-bold text-blue-500 uppercase absolute top-2 left-2">市價</span>
+                    <input type="number" id="price" value="10.60" step="0.01" oninput="updateUI()" class="w-full pt-4 bg-transparent font-mono font-bold text-center">
+                </div>
+                <div class="bg-slate-100 rounded-2xl p-2 relative">
+                    <span class="text-[8px] font-bold text-slate-400 uppercase absolute top-2 left-2">股數</span>
+                    <input type="number" id="shares" value="10000" oninput="updateUI()" class="w-full pt-4 bg-transparent font-mono font-bold text-center">
+                    <button onclick="setMax()" class="absolute bottom-1 right-1 bg-slate-900 text-white text-[7px] px-1.5 py-0.5 rounded font-bold uppercase">Max</button>
+                </div>
+                <div class="bg-slate-900 rounded-2xl p-2 flex flex-col justify-center items-center">
+                    <span class="text-[8px] font-bold text-white/30 uppercase absolute top-2 left-2">交易參考</span>
+                    <p id="estAmount" class="font-mono font-bold text-emerald-400 text-[10px] mt-1">$0</p>
+                </div>
+            </div>
+
+            <button onclick="execute()" id="execBtn" class="active-btn w-full bg-slate-900 text-white font-black py-5 rounded-3xl shadow-2xl uppercase text-sm">確認提交交易</button>
+            <button onclick="collectDiv()" class="active-btn w-full bg-emerald-500 text-white font-black py-4 rounded-3xl shadow-lg uppercase text-xs">💰 領取本月股息</button>
+        </div>
+
+        <div class="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden mb-12">
+            <div class="px-8 py-5 bg-slate-50 border-b flex justify-between items-center text-[10px] font-black text-slate-400">
+                <span>HISTORY LOG</span>
+                <button onclick="resetData()" class="text-rose-400">Reset</button>
+            </div>
+            <div id="logBody" class="divide-y divide-slate-50 text-[11px] max-h-60 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('tradeDate').valueAsDate = new Date();
+        const RATIOS = { b1: 0.40, b2: 0.30, b3: 0.30 };
+        let currentMode = 'BUY';
+        let allocChart = null;
+
+        let state = JSON.parse(localStorage.getItem('3416_final_v12')) || {
+            cash: 1000000,
+            holding: { b1: 0, b2: 0, b3: 0 },
+            used: { b1: 0, b2: 0, b3: 0 },
+            logs: []
+        };
+
+        function switchMode(mode) {
+            currentMode = mode;
+            document.getElementById('buyModeBtn').className = mode === 'BUY' ? "mode-active py-3 rounded-2xl font-black text-xs" : "bg-slate-100 text-slate-400 py-3 rounded-2xl font-black text-xs";
+            document.getElementById('sellModeBtn').className = mode === 'SELL' ? "mode-active py-3 rounded-2xl font-black text-xs !bg-rose-600 !border-rose-600" : "bg-slate-100 text-slate-400 py-3 rounded-2xl font-black text-xs";
+            updateUI();
+        }
+
+        async function syncData() {
+            try {
+                const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/3416.HK`);
+                const data = await res.json();
+                const quote = data.chart.result[0].meta;
+                document.getElementById('price').value = quote.regularMarketPrice.toFixed(2);
+                updateUI();
+            } catch (e) { document.getElementById('syncStatus').innerText = "● Offline"; }
+        }
+
+        function setMax() {
+            const p = parseFloat(document.getElementById('price').value) || 0;
+            const b = document.getElementById('bucket').value;
+            if (p <= 0) return;
+
+            if (currentMode === 'BUY') {
+                const totalEq = state.cash + (state.holding.b1 + state.holding.b2 + state.holding.b3) * p;
+                const limit = totalEq * RATIOS[b];
+                const canSpend = Math.min(Math.max(0, limit - state.used[b]), state.cash);
+                document.getElementById('shares').value = Math.floor(canSpend / p);
+            } else {
+                document.getElementById('shares').value = state.holding[b];
+            }
+            updateUI();
+        }
+
+        function updateUI() {
+            const p = parseFloat(document.getElementById('price').value) || 0;
+            const s = parseInt(document.getElementById('shares').value) || 0;
+            const div = parseFloat(document.getElementById('divSetting').value) || 0;
+            const b = document.getElementById('bucket').value;
+
+            const totalHoldingValue = (state.holding.b1 + state.holding.b2 + state.holding.b3) * p;
+            const totalEq = state.cash + totalHoldingValue;
+            
+            document.getElementById('totalEquity').innerText = "$" + Math.round(totalEq).toLocaleString();
+            document.getElementById('cashBal').innerText = "$" + Math.round(state.cash).toLocaleString();
+            document.getElementById('estMonthDiv').innerText = "$" + Math.round((state.holding.b1+state.holding.b2+state.holding.b3)*div).toLocaleString();
+            
+            const estAmt = p * s;
+            const estEl = document.getElementById('estAmount');
+            estEl.innerText = "$" + Math.round(estAmt).toLocaleString();
+
+            // 比例計算
+            const r1 = totalEq > 0 ? (state.holding.b1 * p / totalEq) : 0;
+            const r2 = totalEq > 0 ? (state.holding.b2 * p / totalEq) : 0;
+            const r3 = totalEq > 0 ? (state.holding.b3 * p / totalEq) : 0;
+
+            document.getElementById('v1_label').innerText = (r1 * 100).toFixed(0) + "%";
+            document.getElementById('v2_label').innerText = (r2 * 100).toFixed(0) + "%";
+            document.getElementById('v3_label').innerText = (r3 * 100).toFixed(0) + "%";
+            document.getElementById('vc_label').innerText = "$" + Math.round(state.cash / 1000) + "K";
+            document.getElementById('yieldTag').innerText = "年息 " + (p > 0 ? (div * 12 / p * 100).toFixed(1) : 0) + "%";
+
+            // 圖表更新 (核心加固)
+            if (allocChart) {
+                allocChart.data.datasets[0].data = [
+                    (state.holding.b1 * p) || 0, 
+                    (state.holding.b2 * p) || 0, 
+                    (state.holding.b3 * p) || 0, 
+                    state.cash || 0
+                ];
+                allocChart.update('none');
+            }
+            localStorage.setItem('3416_final_v12', JSON.stringify(state));
+            renderLogs();
+        }
+
+        function execute() {
+            const p = parseFloat(document.getElementById('price').value);
+            const s = parseInt(document.getElementById('shares').value);
+            const b = document.getElementById('bucket').value;
+            const amt = p * s;
+
+            if (currentMode === 'BUY') {
+                if (state.cash < amt) return alert("現金不足");
+                state.cash -= amt; state.holding[b] += s; state.used[b] += amt;
+                log(`買入 ${s}股 (${b})`, -amt);
+            } else {
+                if (state.holding[b] < s) return alert("持倉不足");
+                const cost = state.holding[b] > 0 ? (state.used[b] / state.holding[b]) * s : 0;
+                state.cash += amt; state.holding[b] -= s; state.used[b] = Math.max(0, state.used[b] - cost);
+                log(`沽出 ${s}股 (${b})`, amt);
+            }
+            updateUI();
+        }
+
+        function collectDiv() {
+            const div = parseFloat(document.getElementById('divSetting').value);
+            const totalS = state.holding.b1 + state.holding.b2 + state.holding.b3;
+            if (totalS <= 0) return;
+            const amt = div * totalS;
+            state.cash += amt;
+            log(`收息 (@$${div})`, amt);
+            updateUI();
+        }
+
+        function log(msg, amt) {
+            state.logs.unshift({ date: document.getElementById('tradeDate').value, msg, amt });
+            if (state.logs.length > 30) state.logs.pop();
+        }
+
+        function renderLogs() {
+            document.getElementById('logBody').innerHTML = state.logs.map(l => `
+                <div class="p-4 flex justify-between items-center bg-white px-8 border-b border-slate-50">
+                    <div class="flex flex-col"><span class="font-bold text-[9px] text-slate-800">${l.msg}</span><span class="text-[7px] text-slate-400 mono">${l.date}</span></div>
+                    <span class="font-black mono text-[11px] ${l.amt>=0?'text-emerald-500':'text-slate-900'}">${l.amt>=0?'+':''}${Math.round(l.amt).toLocaleString()}</span>
+                </div>
+            `).join('');
+        }
+
+        function resetData() { if(confirm("重設所有數據？")) { localStorage.clear(); location.reload(); } }
+
+        // 初始化
+        window.onload = () => {
+            const ctx = document.getElementById('allocChart');
+            if (ctx) {
+                allocChart = new Chart(ctx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['B1', 'B2', 'B3', 'Cash'],
+                        datasets: [{
+                            data: [0, 0, 0, 100],
+                            backgroundColor: ['#3b82f6', '#f59e0b', '#f43f5e', '#f1f5f9'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '80%',
+                        plugins: { legend: { display: false } },
+                        animation: { duration: 500 }
+                    }
+                });
+            }
+            syncData();
+            updateUI();
+        };
+    </script>
+</body>
+</html>
